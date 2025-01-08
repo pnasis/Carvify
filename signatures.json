@@ -1,0 +1,57 @@
+{
+  "jpg": {
+    "header": "FFD8FF",
+    "footer": "FFD9",
+    "extension": ".jpg"
+  },
+  "png": {
+    "header": "89504E47",
+    "footer": "49454E44AE426082",
+    "extension": ".png"
+  },
+  "pdf": {
+    "header": "25504446",
+    "footer": "2525454F46",
+    "extension": ".pdf"
+  },
+  "zip": {
+    "header": "504B0304",
+    "footer": "504B0506",
+    "extension": ".zip"
+  },
+  "rar": {
+    "header": "52617221",
+    "footer": "",
+    "extension": ".rar"
+  },
+  "docx": {
+    "header": "504B0304",
+    "footer": "504B0506",
+    "extension": ".docx"
+  },
+  "xlsx": {
+    "header": "504B0304",
+    "footer": "504B0506",
+    "extension": ".xlsx"
+  },
+  "exe": {
+    "header": "4D5A",
+    "footer": "",
+    "extension": ".exe"
+  },
+  "mp4": {
+    "header": "0000001866747970",
+    "footer": "",
+    "extension": ".mp4"
+  },
+  "mp3": {
+    "header": "494433",
+    "footer": "",
+    "extension": ".mp3"
+  },
+  "gif": {
+    "header": "47494638",
+    "footer": "003B",
+    "extension": ".gif"
+  }
+}
