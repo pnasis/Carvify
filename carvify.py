@@ -105,35 +105,40 @@ def create_disk_image(source, output_file):
 # Main function
 def main():
     display_ascii_art()
-    print("1. List Available Disks/Partitions")
-    print("2. Create Disk Image")
-    print("3. Scan Disk Image for Files")
-    print("4. Extract Specific File")
-    choice = input("Choose an option: ")
+    while True:
+        print("\n1. List Available Disks/Partitions")
+        print("2. Create Disk Image")
+        print("3. Scan Disk Image for Files")
+        print("4. Extract Specific File")
+        print("5. Exit")
+        choice = input("Choose an option: ")
 
-    if choice == "1":
-        list_partitions()
-    elif choice == "2":
-        source = input("Enter the source disk or partition (e.g., /dev/sda): ")
-        output_file = input("Enter the output file name (e.g., disk_image.dd): ")
-        create_disk_image(source, output_file)
-    elif choice == "3":
-        disk_image_path = input("Enter the path to the disk image: ")
-        signatures = load_signatures()
-        fs = read_disk_image(disk_image_path)
-        files_found = scan_for_files(fs, signatures)
-        print("Files Found:")
-        for i, (name, meta_addr, filetype) in enumerate(files_found, 1):
-            print(f"{i}. {name} (Type: {filetype}, Meta Address: {meta_addr})")
-    elif choice == "4":
-        disk_image_path = input("Enter the path to the disk image: ")
-        fs = read_disk_image(disk_image_path)
-        meta_addr = int(input("Enter the meta address of the file to extract: "))
-        filename = input("Enter the filename for the extracted file: ")
-        output_dir = input("Enter the output directory: ")
-        extract_file(fs, meta_addr, output_dir, filename)
-    else:
-        print("Invalid choice.")
+        if choice == "1":
+            list_partitions()
+        elif choice == "2":
+            source = input("Enter the source disk or partition (e.g., /dev/sda): ")
+            output_file = input("Enter the output file name (e.g., disk_image.dd): ")
+            create_disk_image(source, output_file)
+        elif choice == "3":
+            disk_image_path = input("Enter the path to the disk image: ")
+            signatures = load_signatures()
+            fs = read_disk_image(disk_image_path)
+            files_found = scan_for_files(fs, signatures)
+            print("Files Found:")
+            for i, (name, meta_addr, filetype) in enumerate(files_found, 1):
+                print(f"{i}. {name} (Type: {filetype}, Meta Address: {meta_addr})")
+        elif choice == "4":
+            disk_image_path = input("Enter the path to the disk image: ")
+            fs = read_disk_image(disk_image_path)
+            meta_addr = int(input("Enter the meta address of the file to extract: "))
+            filename = input("Enter the filename for the extracted file: ")
+            output_dir = input("Enter the output directory: ")
+            extract_file(fs, meta_addr, output_dir, filename)
+        elif choice == "5":
+            print("Exiting the program. Goodbye!")
+            break
+        else:
+            print("Invalid choice. Please try again.")
 
 if __name__ == "__main__":
     main()
