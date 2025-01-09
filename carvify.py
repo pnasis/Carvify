@@ -106,7 +106,7 @@ def create_disk_image(source, output_file):
 def main():
     display_ascii_art()
     while True:
-        print("\n1. List Available Disks/Partitions")
+        print("1. List Available Disks/Partitions")
         print("2. Create Disk Image")
         print("3. Scan Disk Image for Files")
         print("4. Extract Specific File")
