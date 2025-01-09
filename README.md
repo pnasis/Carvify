@@ -1,7 +1,7 @@
 # Carvify
 
 ## Description
-The **Carvify** tool is a utility designed for forensic purposes. It helps recover files from disk images using file signature analysis. The tool supports creating raw disk images, listing available disks/partitions, scanning for files, and extracting specific files by their metadata address. The program is written in Python and utilizes `pytsk3` for enhanced disk image handling.
+The **Carvify** tool is a Linux utility designed for forensic purposes. It helps recover files from disk images using file signature analysis. The tool supports creating raw disk images, listing available disks/partitions, scanning for files, and extracting specific files by their metadata address. The program is written in Python and utilizes `pytsk3` for enhanced disk image handling.
 
 ## Features
 - List available disks and partitions.
