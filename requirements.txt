@@ -1,0 +1,8 @@
+pytsk3
+json
+os
+re
+subprocess
+tqdm
+logging
+pyfiglet

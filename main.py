@@ -2,10 +2,22 @@ import os
 import re
 import json
 import subprocess
-from tqdm import tqdm
+import pytsk3
 import logging
+from tqdm import tqdm
+from pyfiglet import Figlet
+
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(message)s")
+
+def display_ascii_art():
+    program_name = "Carvify"
+    ascii_art = Figlet(font='slant').renderText(program_name)
+    print(ascii_art)
+
+    # Display credits
+    credits = "\nCreated by: pnasis\nVersion: v1.0\n"
+    print(credits)
 
 # Load file signatures
 def load_signatures(file="signatures.json"):
@@ -14,50 +26,54 @@ def load_signatures(file="signatures.json"):
     with open(file, "r") as f:
         return json.load(f)
 
-# Read disk image with progress tracking
+# List available disks/partitions
+def list_partitions():
+    print("Available disks and partitions:")
+    result = subprocess.run(["lsblk", "-o", "NAME,SIZE,TYPE,MOUNTPOINT"], capture_output=True, text=True)
+    print(result.stdout)
+
+# Read disk image using pytsk3
 def read_disk_image(file_path):
-    file_size = os.path.getsize(file_path)
-    chunk_size = 1024 * 1024  # 1 MB
-    data = b""
+    if not os.path.exists(file_path):
+        raise FileNotFoundError(f"Disk image {file_path} not found.")
+    try:
+        img = pytsk3.Img_Info(file_path)
+        fs = pytsk3.FS_Info(img)
+        return fs
+    except Exception as e:
+        raise RuntimeError(f"Error reading disk image: {e}")
 
-    with open(file_path, "rb") as f, tqdm(total=file_size, unit="B", unit_scale=True, desc="Reading Disk Image") as pbar:
-        while chunk := f.read(chunk_size):
-            data += chunk
-            pbar.update(len(chunk))
-    return data
+# Scan for files in the disk image
+def scan_for_files(fs, signatures):
+    files_found = []
 
-# Scan for signatures
-def scan_for_signatures(data, header, footer):
-    header_pattern = re.compile(header, re.DOTALL)
-    results = []
-    last_end = 0
+    def callback(file):
+        for filetype, info in signatures.items():
+            if file.info.meta and file.info.meta.size > 0:
+                try:
+                    data = file.read_random(0, file.info.meta.size)
+                    if data.startswith(bytes.fromhex(info["header"])):
+                        files_found.append((file.info.name.name.decode("utf-8"), file.info.meta.addr, filetype))
+                except Exception:
+                    pass
 
-    for match in header_pattern.finditer(data):
-        start = match.start()
-        if start < last_end:
-            continue
-        footer_match = data.find(bytes.fromhex(footer), start)
-        if footer_match != -1:
-            end = footer_match + len(bytes.fromhex(footer))
-            results.append((start, end))
-            last_end = end
-        else:
-            # Handle incomplete footer, default to 1MB recovery
-            results.append((start, start + 1024 * 1024))
-            last_end = start + 1024 * 1024
-    return results
+    for dirpath in fs.open_dir("/"):
+        for entry in dirpath:
+            if entry.info.name.name.decode("utf-8") not in [".", ".."]:
+                callback(entry)
 
-# Recover files
-def recover_files(data, matches, output_dir, extension):
+    return files_found
+
+# Extract specific file by address
+def extract_file(fs, meta_addr, output_dir, filename):
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
-    for i, (start, end) in enumerate(matches):
-        recovered_data = data[start:end]
-        filename = os.path.join(output_dir, f"file_{i + 1}{extension}")
-        with open(filename, "wb") as f:
-            f.write(recovered_data)
-        if end - start < 1024:  # Example threshold for partial files
-            logging.info(f"Recovered partial file: {filename}")
+    file_obj = fs.open_meta(meta_addr=meta_addr)
+    data = file_obj.read_random(0, file_obj.info.meta.size)
+    output_path = os.path.join(output_dir, filename)
+    with open(output_path, "wb") as f:
+        f.write(data)
+    print(f"File extracted to {output_path}")
 
 # Create disk image
 def create_disk_image(source, output_file):
@@ -72,7 +88,6 @@ def create_disk_image(source, output_file):
         raise FileNotFoundError(f"Source device {source} not found.")
 
     try:
-        # Use dd command to create a disk image
         with open(output_file, "wb") as dst, tqdm(unit="B", unit_scale=True, desc="Creating Disk Image") as pbar:
             result = subprocess.run(
                 ["dd", f"if={source}", f"of={output_file}", "bs=1M"],
@@ -89,24 +104,34 @@ def create_disk_image(source, output_file):
 
 # Main function
 def main():
-    print("1. Create Disk Image")
-    print("2. Scan and Recover Files")
+    display_ascii_art()
+    print("1. List Available Disks/Partitions")
+    print("2. Create Disk Image")
+    print("3. Scan Disk Image for Files")
+    print("4. Extract Specific File")
     choice = input("Choose an option: ")
 
     if choice == "1":
+        list_partitions()
+    elif choice == "2":
         source = input("Enter the source disk or partition (e.g., /dev/sda): ")
         output_file = input("Enter the output file name (e.g., disk_image.dd): ")
         create_disk_image(source, output_file)
-    elif choice == "2":
-        # Existing scan and recovery process
-        signatures = load_signatures()
+    elif choice == "3":
         disk_image_path = input("Enter the path to the disk image: ")
-        data = read_disk_image(disk_image_path)
-        for filetype, info in signatures.items():
-            print(f"Scanning for {filetype}...")
-            matches = scan_for_signatures(data, bytes.fromhex(info["header"]), bytes.fromhex(info["footer"]))
-            recover_files(data, matches, "output", info["extension"])
-            print(f"Recovered {len(matches)} {filetype} files.")
+        signatures = load_signatures()
+        fs = read_disk_image(disk_image_path)
+        files_found = scan_for_files(fs, signatures)
+        print("Files Found:")
+        for i, (name, meta_addr, filetype) in enumerate(files_found, 1):
+            print(f"{i}. {name} (Type: {filetype}, Meta Address: {meta_addr})")
+    elif choice == "4":
+        disk_image_path = input("Enter the path to the disk image: ")
+        fs = read_disk_image(disk_image_path)
+        meta_addr = int(input("Enter the meta address of the file to extract: "))
+        filename = input("Enter the filename for the extracted file: ")
+        output_dir = input("Enter the output directory: ")
+        extract_file(fs, meta_addr, output_dir, filename)
     else:
         print("Invalid choice.")
 
