@@ -61,7 +61,8 @@ The tool relies on a `signatures.json` file to identify file types. Ensure this 
 2. Create a disk image:
    ```
    Enter the source disk or partition (e.g., /dev/sda): /dev/sda
-   Enter the output file name (e.g., disk_image.dd): disk_image.dd
+   Enter the output file name (e.g., disk_image): disk_image
+   Enter the format (raw, qcow2, vmdk): raw
    ```
 3. Scan the disk image for files:
    ```
