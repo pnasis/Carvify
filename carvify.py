@@ -76,28 +76,42 @@ def extract_file(fs, meta_addr, output_dir, filename):
     print(f"File extracted to {output_path}")
 
 # Create disk image
-def create_disk_image(source, output_file):
+def create_disk_image(source, output_file, format):
     """
-    Create a raw disk image from the specified source.
+    Create a disk image in the specified format from the source.
 
     Args:
         source (str): The source disk or partition (e.g., /dev/sda).
         output_file (str): Path to save the created disk image.
+        format (str): The format of the disk image (e.g., raw, qcow2, vmdk).
     """
     if not os.path.exists(source):
         raise FileNotFoundError(f"Source device {source} not found.")
 
     try:
-        with open(output_file, "wb") as dst, tqdm(unit="B", unit_scale=True, desc="Creating Disk Image") as pbar:
+        if format == "raw":
+            with open(output_file, "wb") as dst, tqdm(unit="B", unit_scale=True, desc="Creating Disk Image") as pbar:
+                result = subprocess.run(
+                    ["dd", f"if={source}", f"of={output_file}", "bs=1M"],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True
+                )
+                if result.returncode != 0:
+                    raise RuntimeError(f"Error creating disk image: {result.stderr}")
+                pbar.update(os.path.getsize(output_file))
+        elif format in ["qcow2", "vmdk"]:
             result = subprocess.run(
-                ["dd", f"if={source}", f"of={output_file}", "bs=1M"],
+                ["qemu-img", "convert", "-f", "raw", "-O", format, source, output_file],
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=True
             )
             if result.returncode != 0:
-                raise RuntimeError(f"Error creating disk image: {result.stderr}")
-            pbar.update(os.path.getsize(output_file))
+                raise RuntimeError(f"Error creating {format} disk image: {result.stderr}")
+        else:
+            raise ValueError("Unsupported format. Supported formats: raw, qcow2, vmdk.")
+
         print(f"Disk image created successfully: {output_file}")
     except Exception as e:
         print(f"Error creating disk image: {e}")
@@ -106,7 +120,7 @@ def create_disk_image(source, output_file):
 def main():
     display_ascii_art()
     while True:
-        print("1. List Available Disks/Partitions")
+        print("\n1. List Available Disks/Partitions")
         print("2. Create Disk Image")
         print("3. Scan Disk Image for Files")
         print("4. Extract Specific File")
@@ -117,8 +131,9 @@ def main():
             list_partitions()
         elif choice == "2":
             source = input("Enter the source disk or partition (e.g., /dev/sda): ")
-            output_file = input("Enter the output file name (e.g., disk_image.dd): ")
-            create_disk_image(source, output_file)
+            output_file = input("Enter the output file name (e.g., disk_image): ")
+            format = input("Enter the format (raw, qcow2, vmdk): ")
+            create_disk_image(source, f"{output_file}.{format}", format)
         elif choice == "3":
             disk_image_path = input("Enter the path to the disk image: ")
             signatures = load_signatures()
