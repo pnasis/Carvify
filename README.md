@@ -75,7 +75,6 @@ The tool relies on a `signatures.json` file to identify file types. Ensure this 
    Enter the filename for the extracted file: recovered.jpg
    Enter the output directory: ./recovered_files
    ```
-```
 
 ## License
 This project is licensed under the Apache 2.0 License. See the [LICENSE](LICENSE) file for details.
