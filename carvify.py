@@ -7,33 +7,35 @@ import logging
 from tqdm import tqdm
 from pyfiglet import Figlet
 
-
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(message)s")
 
 def display_ascii_art():
     program_name = "Carvify"
-    ascii_art = Figlet(font='slant').renderText(program_name)
+    ascii_art = Figlet(font="slant").renderText(program_name)
     print(ascii_art)
+    print("\nCreated by: pnasis\nVersion: v1.0\n")
 
-    # Display credits
-    credits = "\nCreated by: pnasis\nVersion: v1.0\n"
-    print(credits)
-
-# Load file signatures
 def load_signatures(file="signatures.json"):
+    """
+    Load file signatures for identifying specific file types.
+    """
     if not os.path.exists(file):
         raise FileNotFoundError(f"Signature file {file} not found.")
     with open(file, "r") as f:
         return json.load(f)
 
-# List available disks/partitions
 def list_partitions():
+    """
+    List available disks and partitions using `lsblk`.
+    """
     print("Available disks and partitions:")
     result = subprocess.run(["lsblk", "-o", "NAME,SIZE,TYPE,MOUNTPOINT"], capture_output=True, text=True)
     print(result.stdout)
 
-# Read disk image using pytsk3
 def read_disk_image(file_path):
+    """
+    Open a disk image and return its file system object.
+    """
     if not os.path.exists(file_path):
         raise FileNotFoundError(f"Disk image {file_path} not found.")
     try:
@@ -43,80 +45,75 @@ def read_disk_image(file_path):
     except Exception as e:
         raise RuntimeError(f"Error reading disk image: {e}")
 
-# Scan for files in the disk image
 def scan_for_files(fs, signatures):
+    """
+    Scan a file system for files matching known signatures.
+    """
     files_found = []
 
-    def callback(file):
-        for filetype, info in signatures.items():
-            if file.info.meta and file.info.meta.size > 0:
-                try:
-                    data = file.read_random(0, file.info.meta.size)
-                    if data.startswith(bytes.fromhex(info["header"])):
-                        files_found.append((file.info.name.name.decode("utf-8"), file.info.meta.addr, filetype))
-                except Exception:
-                    pass
+    def process_entry(entry):
+        if entry.info.meta and entry.info.meta.type == pytsk3.TSK_FS_META_TYPE_REG:
+            try:
+                file_name = entry.info.name.name.decode("utf-8")
+                file_data = entry.read_random(0, entry.info.meta.size)
 
-    for dirpath in fs.open_dir("/"):
-        for entry in dirpath:
-            if entry.info.name.name.decode("utf-8") not in [".", ".."]:
-                callback(entry)
+                for filetype, signature in signatures.items():
+                    header = bytes.fromhex(signature["header"])
+                    if file_data.startswith(header):
+                        files_found.append((file_name, entry.info.meta.addr, filetype))
+            except Exception:
+                pass
 
+    def walk_directory(directory):
+        for entry in directory:
+            if entry.info.name.name not in [b".", b".."]:
+                if entry.info.meta and entry.info.meta.type == pytsk3.TSK_FS_META_TYPE_DIR:
+                    try:
+                        subdir = fs.open_dir(inode=entry.info.meta.addr)
+                        walk_directory(subdir)
+                    except Exception:
+                        pass
+                else:
+                    process_entry(entry)
+
+    root_dir = fs.open_dir("/")
+    walk_directory(root_dir)
     return files_found
 
-# Extract specific file by address
 def extract_file(fs, meta_addr, output_dir, filename):
+    """
+    Extract a file from the file system using its meta address.
+    """
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
-    file_obj = fs.open_meta(meta_addr=meta_addr)
-    data = file_obj.read_random(0, file_obj.info.meta.size)
-    output_path = os.path.join(output_dir, filename)
-    with open(output_path, "wb") as f:
-        f.write(data)
-    print(f"File extracted to {output_path}")
+    try:
+        file_obj = fs.open_meta(meta_addr=meta_addr)
+        data = file_obj.read_random(0, file_obj.info.meta.size)
+        output_path = os.path.join(output_dir, filename)
+        with open(output_path, "wb") as f:
+            f.write(data)
+        print(f"File extracted to {output_path}")
+    except Exception as e:
+        print(f"Error extracting file: {e}")
 
-# Create disk image
 def create_disk_image(source, output_file, format):
     """
     Create a disk image in the specified format from the source.
-
-    Args:
-        source (str): The source disk or partition (e.g., /dev/sda).
-        output_file (str): Path to save the created disk image.
-        format (str): The format of the disk image (e.g., raw, qcow2, vmdk).
     """
     if not os.path.exists(source):
         raise FileNotFoundError(f"Source device {source} not found.")
-
     try:
         if format == "raw":
-            with open(output_file, "wb") as dst, tqdm(unit="B", unit_scale=True, desc="Creating Disk Image") as pbar:
-                result = subprocess.run(
-                    ["dd", f"if={source}", f"of={output_file}", "bs=1M"],
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
-                    text=True
-                )
-                if result.returncode != 0:
-                    raise RuntimeError(f"Error creating disk image: {result.stderr}")
-                pbar.update(os.path.getsize(output_file))
+            with open(output_file, "wb") as dst:
+                subprocess.run(["dd", f"if={source}", f"of={output_file}.dd", "bs=1M"], check=True)
         elif format in ["qcow2", "vmdk"]:
-            result = subprocess.run(
-                ["qemu-img", "convert", "-f", "raw", "-O", format, source, output_file],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True
-            )
-            if result.returncode != 0:
-                raise RuntimeError(f"Error creating {format} disk image: {result.stderr}")
+            subprocess.run(["qemu-img", "convert", "-f", "raw", "-O", format, source, "{output_file}.{format}], check=True)
         else:
             raise ValueError("Unsupported format. Supported formats: raw, qcow2, vmdk.")
-
         print(f"Disk image created successfully: {output_file}")
     except Exception as e:
         print(f"Error creating disk image: {e}")
 
-# Main function
 def main():
     display_ascii_art()
     while True:
@@ -133,13 +130,13 @@ def main():
             source = input("Enter the source disk or partition (e.g., /dev/sda): ")
             output_file = input("Enter the output file name (e.g., disk_image): ")
             format = input("Enter the format (raw, qcow2, vmdk): ")
-            create_disk_image(source, f"{output_file}.{format}", format)
+            create_disk_image(source, f"{output_file}", format)
         elif choice == "3":
             disk_image_path = input("Enter the path to the disk image: ")
             signatures = load_signatures()
             fs = read_disk_image(disk_image_path)
             files_found = scan_for_files(fs, signatures)
-            print("Files Found:")
+            print("\nFiles Found:")
             for i, (name, meta_addr, filetype) in enumerate(files_found, 1):
                 print(f"{i}. {name} (Type: {filetype}, Meta Address: {meta_addr})")
         elif choice == "4":
